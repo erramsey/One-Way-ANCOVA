@@ -1,0 +1,104 @@
+DATA baseball;
+    SET sashelp.baseball;
+
+*Examining descriptive statistics of the data;
+PROC CONTENTS DATA=baseball;
+PROC MEANS DATA=baseball;
+PROC FREQ DATA=baseball;
+
+*Creating a means plot to compare the mean salaries of the different div(leage and division), divisions, and leagues;
+*Results suggest that the mean salaries vary significantly by division, but not by league;
+PROC SORT DATA=baseball; BY div;
+PROC MEANS DATA=baseball;
+ VAR salary; BY div;
+ OUTPUT OUT=means MEAN=average;
+ GOPTIONS reset=all;
+ SYMBOL v=circle c=blue h=.8 i=join;
+PROC GPLOT DATA=means;
+ PLOT average*div/frame;
+RUN;  
+PROC SORT DATA=baseball; BY division;
+PROC MEANS DATA=baseball;
+ VAR salary; BY division;
+ OUTPUT OUT=means MEAN=average;
+ GOPTIONS reset=all;
+ SYMBOL v=circle c=blue h=.8 i=join;
+PROC GPLOT DATA=means;
+ PLOT average*division/frame;
+RUN;   
+PROC SORT DATA=baseball; BY league;
+PROC MEANS DATA=baseball;
+ VAR salary; BY league;
+ OUTPUT OUT=means MEAN=average;
+ GOPTIONS reset=all;
+ SYMBOL v=circle c=blue h=.8 i=join;
+PROC GPLOT DATA=means;
+ PLOT average*league/frame;
+RUN;  
+
+*A boxplot of salary for each division suggests that the mean and variation of salary vary by division;
+PROC SORT DATA=baseball;
+    BY division;
+RUN;
+PROC BOXPLOT DATA=baseball;
+    PLOT salary*division;
+    INSET min mean max stddev/pos = tm;
+    INSETGROUP min mean max stddev ;
+RUN;        
+
+*Running a one-way ANOVA with division and logsalary;
+*The decision to use logsalary instead of salary is based on previous analysis of the data (see: 'Multiple-linear-regression');
+*Results show a significant association between division and logsalary;
+PROC GLM DATA = baseball plots = all;
+   CLASS division;
+   MODEL logsalary = division;
+   LSMEANS division;
+RUN;
+
+*Examining the possible covariate YrMajor;
+*The scatterplot suggests that there is a linear relationship between logsalary and YrMajor;
+PROC SGPLOT data = baseball;
+    SCATTER x=YrMajor y=logsalary / group=division;
+RUN;
+
+*Checking for an association between the group division and the covariate YrMajor;
+*Results suggest that there is no significant association between the two;
+PROC GLM data = baseball plots = all;
+    CLASS division;
+    MODEL YrMajor = division / solution;
+RUN;
+
+*Centering the covariate YrMajor;
+PROC MEANS DATA = baseball mean
+    maxdec=3;
+    VAR YrMajor;
+RUN;
+DATA baseball2;
+    set baseball;
+    center = YrMajor - 7.68;
+RUN;
+
+*Checking for non-zero slopes and the assumption of common slopes;
+*Results suggest that at least one of the slopes is not zero
+and that there is no evidence that the common slope assumption does not hold;
+*From these results, we will fit a model with a common slope and not include an interaction term;
+PROC GLM DATA = baseball2 plots = all;
+    CLASS division;
+    MODEL logsalary = division YrMajor(division) / solution;
+    CONTRAST 'common slopes' YrMajor(division) 1 -1;
+RUN;
+
+*Final model;
+*We examine the Type III SS to determine results.
+Results suggest that division has a significant affect on logsalary.
+We can conclude that the East division has a significantly higher salary than the West division;
+*Residuals show ten possible outliers, of which one is large.
+There are 14 points with high leverage.
+The graph of residuals vs. predicted values appears to have some heteroscedasticity.
+The right side of the residual-fit spread plot is taller than the left, suggesting that there is a some variation that is not explained by the model.;
+PROC GLM DATA = baseball2 plots = all;
+    CLASS division;
+    MODEL logsalary = division center / solution;
+    LSMEANS division / at center = 0;
+    LSMEANS division;
+RUN;
